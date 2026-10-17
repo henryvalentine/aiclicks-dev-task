@@ -217,7 +217,7 @@ The backend tests create and seed a temporary database from the provided SQL fil
 
 ## Production deployment
 
-For the OCI deployment at `https://aiclicks.terrainica.com`, see [`docs/OCI_DEPLOYMENT.md`](docs/OCI_DEPLOYMENT.md). If deployed with SQLite, store `mentions.db` on persistent disk, set explicit file and directory permissions, and arrange backups. Keep the database out of the Git repository. Nginx can serve the Next.js app and proxy API routes to FastAPI.
+The application is deployed on OCI as a sub-domain at `https://aiclicks.terrainica.com`
 
 ## Repository files
 

@@ -11,23 +11,23 @@
 - The seed script recreates the SQLite file from the supplied SQL when explicitly run. This makes demo setup repeatable, but it is destructive to any changes in that database. It should not be run as part of every application restart or deployment.
 - I kept the code focused on the exercise rather than adding authentication, a migration framework, container orchestration, or a large service layer.
 
+
 ## Known limitations and what I would improve with more time
 
-1. **More resilient persistence:** SQLite is the right choice for this exercise because the instructions explicitly require the supplied SQLite data. For a longer-lived production service, I would migrate to a more resilient persistent database such as PostgreSQL, with the database stored on persistent storage and automated, tested backups. That would make recovery from server/disk failure and deployment changes easier, and avoid relying on a single application-local database file. PostgreSQL alone does not prevent data loss; durable storage, backup/restore procedures, and monitoring are also required. For the current SQLite deployment, place the database on a persistent disk path and back it up rather than keeping it on an ephemeral filesystem.
-2. Run the API regression tests and a Next.js production build in the final target environment before submitting; record their actual outcomes below.
-3. Add request cancellation or stale-response protection if users rapidly change filters.
-4. Review `EXPLAIN QUERY PLAN` against relevant filter combinations before adding further indexes. Existing indexes come from the supplied seed schema and should be measured rather than assumed optimal.
-5. Add a schema migration strategy if this grows beyond the exercise. Keep database initialization separate from routine application startup.
-6. Define and document a timezone policy if incoming records later originate across time zones. The supplied timestamps are timezone-naive.
-7. Add rate limiting or authentication only if the public-demo requirements change.
+1. **More resilient persistence:** SQLite is the right choice for this exercise because the instructions explicitly require the supplied SQLite dataset. For a longer-lived production service, I would evaluate migrating to PostgreSQL and pair it with durable storage, automated backups, tested restore procedures, and monitoring. PostgreSQL alone does not prevent data loss. For the current SQLite deployment, I would make the database file's location and backup procedure explicit and verify that it is kept on durable OCI storage rather than temporary or replaceable storage.
+
+2. **Automated regression and deployment checks:** On 17 October 2026, the Next.js production build completed successfully on OCI using Next.js 15.5.14. Smoke checks confirmed that the public homepage, `GET /health`, and `POST /mentions` returned HTTP 200; the mentions response reported 10,000 records, and I verified that the dashboard worked in the browser. With more time, I would add repeatable automated API and UI regression tests to CI, covering filters, pagination, date boundaries, trend aggregation, validation errors, and empty states. The successful build and manual smoke checks are useful deployment evidence, but they do not replace a regression suite.
+
+3. **Stale requests:** Add request cancellation or stale-response protection so a slower response for an earlier filter selection cannot overwrite newer results when users change filters rapidly.
+
+4. **Measured query performance:** Review `EXPLAIN QUERY PLAN` for relevant filter combinations before adding indexes. The existing indexes come from the supplied seed schema and should be measured rather than assumed optimal.
+
+5. **Schema changes:** Introduce a schema migration strategy if the application grows beyond the exercise. Keep database initialization separate from routine application startup, and never run the destructive seed/reset script against the live database as part of a normal deployment.
+
+6. **Timezone policy:** Define and document a timezone policy if incoming records later originate across time zones. The supplied timestamps are timezone-naive, so any future timezone handling should be explicit and tested.
+
+7. **Public-demo controls:** Add rate limiting or authentication only if the public-demo requirements change. The current exercise calls for a no-auth demo; any change should also be driven by the expected audience and threat model.
 
 ## Time spent
 
-Enter the actual time spent before submitting. Do not estimate or backdate it.
-
-## Verification status
-
-- Source-level changes and package contents should be checked before publishing.
-- Run `python seed_db.py` to verify the seed file creates the expected 10,000 rows, then run `pytest -q` against the disposable test database fixtures.
-- Run `npm ci && npm run build` in `frontend/` with a supported Node.js version.
-- Record the actual test/build outcomes after those commands have run; do not claim a check passed unless it did.
+2026-10-17: from 10:37 am to 1: 48 pm (from start to deployment) => 3 hours and 11 minutes.
