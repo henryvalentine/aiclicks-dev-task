@@ -133,40 +133,39 @@ export default function Dashboard() {
     <main className="dashboard-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Signal home">
-          <span className="brand-mark">s</span><span>signal<span className="brand-light">/insights</span></span>
+          <span className="brand-mark">AC</span><span>AI-Clicks</span>
         </a>
-        <div className="topbar-meta"><span className="status-dot" /> Demo workspace <span className="meta-divider">/</span> Brand visibility</div>
+        <div className="topbar-meta"><span className="status-dot" /> AI Model <span className="meta-divider">/</span> Brand visibility</div>
       </header>
 
       <div className="page-content" id="top">
         <div className="page-heading">
-          <div>
-            <p className="eyebrow">AI VISIBILITY MONITOR</p>
+          <div>            
             <h1>Brand mentions</h1>
             <p className="page-subtitle">See when and how often your brand appears in AI answers.</p>
           </div>
-          <div className="updated-label"><span className="live-dot" /> Seed dataset · Jan–Mar 2025</div>
+          <div className="updated-label"><span className="live-dot" /> Dataset timeline: Jan-Mar 2025, </div>
         </div>
 
         <section className="summary-grid" aria-label="Mention summary">
           <article className="summary-card">
             <div className="summary-top"><span className="summary-label">Matching records</span><span className="summary-icon">↗</span></div>
-            <strong>{loading ? "—" : numberFormat.format(total)}</strong>
+            <strong>{loading ? "-" : numberFormat.format(total)}</strong>
             <span className="summary-foot">Records matching your filters</span>
           </article>
           <article className="summary-card">
             <div className="summary-top"><span className="summary-label">On this page</span><span className="summary-icon">◎</span></div>
-            <strong>{loading ? "—" : numberFormat.format(mentions.length)}</strong>
+            <strong>{loading ? "-" : numberFormat.format(mentions.length)}</strong>
             <span className="summary-foot">Up to {PAGE_SIZE} records per page</span>
           </article>
           <article className="summary-card">
             <div className="summary-top"><span className="summary-label">Mentions found</span><span className="summary-icon">✳</span></div>
-            <strong>{loading ? "—" : numberFormat.format(mentionedCount)}</strong>
+            <strong>{loading ? "-" : numberFormat.format(mentionedCount)}</strong>
             <span className="summary-foot">Mentioned in the current page</span>
           </article>
           <article className="summary-card summary-card-accent">
             <div className="summary-top"><span className="summary-label">Page mention rate</span><span className="summary-icon">%</span></div>
-            <strong>{loading ? "—" : `${mentionRate}%`}</strong>
+            <strong>{loading ? "-" : `${mentionRate}%`}</strong>
             <span className="summary-foot">Based on visible records</span>
           </article>
         </section>
@@ -217,17 +216,17 @@ export default function Dashboard() {
                   <td className="query-cell"><span>{mention.query_text}</span><small>{mention.id}</small></td>
                   <td><span className={`model-chip model-${mention.model}`}>{modelLabels[mention.model] ?? mention.model}</span></td>
                   <td><span className={mention.mentioned ? "mention-status yes" : "mention-status no"}><i />{mention.mentioned ? "Yes" : "No"}</span></td>
-                  <td>{mention.position == null ? <span className="muted-dash">—</span> : <span className="position-value">#{mention.position}</span>}</td>
-                  <td>{mention.sentiment ? <span className={`sentiment sentiment-${mention.sentiment}`}>{mention.sentiment}</span> : <span className="muted-dash">—</span>}</td>
-                  <td>{mention.citation_url ? <a className="citation-link" href={mention.citation_url} target="_blank" rel="noreferrer" title={mention.citation_url}>{new URL(mention.citation_url).hostname}<span> ↗</span></a> : <span className="muted-dash">—</span>}</td>
+                  <td>{mention.position == null ? <span className="muted-dash">-</span> : <span className="position-value">#{mention.position}</span>}</td>
+                  <td>{mention.sentiment ? <span className={`sentiment sentiment-${mention.sentiment}`}>{mention.sentiment}</span> : <span className="muted-dash">-</span>}</td>
+                  <td>{mention.citation_url ? <a className="citation-link" href={mention.citation_url} target="_blank" rel="noreferrer" title={mention.citation_url}>{new URL(mention.citation_url).hostname}<span> ↗</span></a> : <span className="muted-dash">-</span>}</td>
                   <td className="date-cell">{timestamp(mention.created_at)}</td>
                 </tr>)}
               </tbody></table></div>
-              <div className="pagination"><span>Showing <strong>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)}</strong> of <strong>{numberFormat.format(total)}</strong></span><div className="pagination-controls"><button type="button" className="page-button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>← Previous</button><span className="page-indicator">Page {page} of {totalPages}</span><button type="button" className="page-button" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next →</button></div></div>
+              <div className="pagination"><span>Showing <strong>{(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)}</strong> of <strong>{numberFormat.format(total)}</strong></span><div className="pagination-controls"><button type="button" className="page-button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>← Previous</button><span className="page-indicator">Page {page} of {totalPages}</span><button type="button" className="page-button" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next →</button></div></div>
             </>
           )}
         </section>
-        <footer className="page-footer"><span>signal/insights <span className="footer-separator">·</span> Brand mention analytics</span><span>Built for clarity, not noise.</span></footer>
+        <footer className="page-footer"><span>AI-Clicks <span className="footer-separator">·</span> Brand mention analytics</span><span>Built for clarity and simplicity.</span></footer>
       </div>
     </main>
   );
