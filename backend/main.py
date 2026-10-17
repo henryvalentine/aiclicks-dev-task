@@ -1,22 +1,138 @@
-from fastapi import FastAPI
+"""HTTP API for browsing and aggregating AI brand mentions in SQLite."""
+import os
+from contextlib import asynccontextmanager
+from datetime import timedelta
+from pathlib import Path
+
+import aiosqlite
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Brand Mentions API")
+from models import MentionFilters, MentionsRequest, MentionsResponse, TrendsRequest, TrendsResponse
 
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+
+def database_path() -> Path:
+    configured_value = os.getenv("MENTIONS_DB_PATH") or str(BACKEND_DIR / "mentions.db")
+    configured = Path(configured_value).expanduser()
+    if not configured.is_absolute():
+        configured = BACKEND_DIR / configured
+    return configured.resolve()
+
+DB_PATH = database_path()
+FRONTEND_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not DB_PATH.is_file():
+        raise RuntimeError(
+            f"SQLite database not found at {DB_PATH}. Run `python seed_db.py` from backend/ first."
+        )
+    # Set a bounded wait for short-lived concurrent writes and use WAL for better local concurrency.
+    async with aiosqlite.connect(DB_PATH, timeout=5) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=5000")
+    yield
+
+app = FastAPI(title="Brand Mentions API", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=FRONTEND_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
+def add_date_filters(clauses: list[str], params: list, date_from, date_to) -> None:
+    """Append parameterized SQLite timestamp predicates; both user dates are inclusive."""
+    if date_from:
+        clauses.append("created_at >= ?")
+        params.append(date_from.isoformat())
+    if date_to:
+        clauses.append("created_at < ?")
+        params.append((date_to + timedelta(days=1)).isoformat())
 
-# TODO: Initialize database connection (use aiosqlite)
-# TODO: Implement POST /mentions endpoint (see README for spec)
-# TODO: Implement POST /mentions/trends endpoint (see README for spec)
-
+def where_clause(clauses: list[str]) -> str:
+    return f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    try:
+        async with aiosqlite.connect(DB_PATH, timeout=5) as db:
+            await db.execute("SELECT 1")
+        return {"status": "ok", "database": "available"}
+    except (aiosqlite.Error, OSError) as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+
+@app.post("/mentions", response_model=MentionsResponse)
+async def list_mentions(request: MentionsRequest):
+    filters = request.filters or MentionFilters()
+    clauses: list[str] = []
+    params: list = []
+    if filters.model:
+        clauses.append("model = ?")
+        params.append(filters.model)
+    if filters.sentiment:
+        clauses.append("sentiment = ?")
+        params.append(filters.sentiment)
+    add_date_filters(clauses, params, filters.date_from, filters.date_to)
+    where_sql = where_clause(clauses)
+    offset = (request.page - 1) * request.per_page
+
+    try:
+        async with aiosqlite.connect(DB_PATH, timeout=5) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute("PRAGMA busy_timeout=5000")
+            cursor = await db.execute(f"SELECT COUNT(*) AS total FROM mentions {where_sql}", params)
+            total = (await cursor.fetchone())["total"]
+            cursor = await db.execute(
+                f"""SELECT id, query_text, model, mentioned, position, sentiment,
+                           citation_url, created_at
+                    FROM mentions {where_sql}
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ? OFFSET ?""",
+                [*params, request.per_page, offset],
+            )
+            rows = await cursor.fetchall()
+    except (aiosqlite.Error, OSError) as exc:
+        raise HTTPException(status_code=500, detail="Unable to read mentions from the database") from exc
+
+    data = [dict(row) for row in rows]
+    for item in data:
+        item["mentioned"] = bool(item["mentioned"])
+    return {"data": data, "total": total, "page": request.page, "per_page": request.per_page}
+
+@app.post("/mentions/trends", response_model=TrendsResponse)
+async def mention_trends(request: TrendsRequest):
+    clauses: list[str] = []
+    params: list = []
+    add_date_filters(clauses, params, request.date_from, request.date_to)
+    where_sql = where_clause(clauses)
+    # SQLite weekday numbering: Sunday=0. This expression buckets weeks from Monday.
+    bucket = (
+        "date(created_at)" if request.group_by == "day"
+        else "date(created_at, '-' || ((CAST(strftime('%w', created_at) AS INTEGER) + 6) % 7) || ' days')"
+    )
+    try:
+        async with aiosqlite.connect(DB_PATH, timeout=5) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute("PRAGMA busy_timeout=5000")
+            cursor = await db.execute(
+                f"""SELECT {bucket} AS date,
+                           COUNT(*) AS total,
+                           SUM(CASE WHEN mentioned = 1 THEN 1 ELSE 0 END) AS mentioned
+                    FROM mentions {where_sql}
+                    GROUP BY date
+                    ORDER BY date ASC""",
+                params,
+            )
+            rows = await cursor.fetchall()
+    except (aiosqlite.Error, OSError) as exc:
+        raise HTTPException(status_code=500, detail="Unable to calculate mention trends") from exc
+    return {"data": [dict(row) for row in rows]}

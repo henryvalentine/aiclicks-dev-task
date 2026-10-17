@@ -1,41 +1,52 @@
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
+"""Validated request and response contracts for the mentions API."""
+from datetime import date, datetime
+from typing import Literal
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# Request models
+ModelName = Literal["chatgpt", "claude", "gemini", "perplexity"]
+SentimentName = Literal["positive", "neutral", "negative"]
 
 class MentionFilters(BaseModel):
-    model: Optional[str] = None  # chatgpt, claude, gemini, perplexity
-    sentiment: Optional[str] = None  # positive, neutral, negative
-    date_from: Optional[str] = None  # YYYY-MM-DD
-    date_to: Optional[str] = None  # YYYY-MM-DD
+    model_config = ConfigDict(extra="forbid")
+    model: ModelName | None = None
+    sentiment: SentimentName | None = None
+    date_from: date | None = None
+    date_to: date | None = None
 
+    @model_validator(mode="after")
+    def check_date_range(self):
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from must be on or before date_to")
+        return self
 
 class MentionsRequest(BaseModel):
-    page: int = 1
-    per_page: int = 25
-    filters: Optional[MentionFilters] = None
-
+    model_config = ConfigDict(extra="forbid")
+    page: int = Field(default=1, ge=1)
+    per_page: int = Field(default=25, ge=1, le=100)
+    filters: MentionFilters | None = None
 
 class TrendsRequest(BaseModel):
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
-    group_by: str = "day"  # "day" or "week"
+    model_config = ConfigDict(extra="forbid")
+    date_from: date | None = None
+    date_to: date | None = None
+    group_by: Literal["day", "week"] = "day"
 
-
-# Response models
+    @model_validator(mode="after")
+    def check_date_range(self):
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from must be on or before date_to")
+        return self
 
 class Mention(BaseModel):
     id: str
     query_text: str
     model: str
     mentioned: bool
-    position: Optional[int] = None
-    sentiment: Optional[str] = None
-    citation_url: Optional[str] = None
+    position: int | None = None
+    sentiment: str | None = None
+    citation_url: str | None = None
     created_at: datetime
-
 
 class MentionsResponse(BaseModel):
     data: list[Mention]
@@ -43,12 +54,10 @@ class MentionsResponse(BaseModel):
     page: int
     per_page: int
 
-
 class TrendPoint(BaseModel):
     date: str
     total: int
     mentioned: int
-
 
 class TrendsResponse(BaseModel):
     data: list[TrendPoint]

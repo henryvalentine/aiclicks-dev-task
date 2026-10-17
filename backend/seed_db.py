@@ -1,29 +1,45 @@
-"""Run this script to create and seed the SQLite database."""
+"""Create and seed the local SQLite database from the supplied seed_data.sql.
 
-import sqlite3
+WARNING: This command intentionally recreates the database. It is an initialization/reset
+command, not a normal application startup or deployment command.
+"""
 import os
+import sqlite3
+from pathlib import Path
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "mentions.db")
-SEED_PATH = os.path.join(os.path.dirname(__file__), "..", "seed_data.sql")
+from dotenv import load_dotenv
 
+BACKEND_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BACKEND_DIR.parent
+load_dotenv(BACKEND_DIR / ".env")
 
-def seed():
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
+def database_path() -> Path:
+    configured_value = os.getenv("MENTIONS_DB_PATH") or str(BACKEND_DIR / "mentions.db")
+    configured = Path(configured_value).expanduser()
+    if not configured.is_absolute():
+        configured = BACKEND_DIR / configured
+    return configured.resolve()
 
-    conn = sqlite3.connect(DB_PATH)
-    with open(SEED_PATH) as f:
-        conn.executescript(f.read())
-    conn.close()
+def seed() -> None:
+    db_path = database_path()
+    seed_path = ROOT_DIR / "seed_data.sql"
+    if not seed_path.is_file():
+        raise FileNotFoundError(f"Seed file not found: {seed_path}")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Database created at {DB_PATH}")
-
-    # Verify
-    conn = sqlite3.connect(DB_PATH)
-    count = conn.execute("SELECT COUNT(*) FROM mentions").fetchone()[0]
-    print(f"Seeded {count} mention records")
-    conn.close()
-
+    # The supplied SQL creates the table/indexes and inserts the 10,000 fixture records.
+    # A separate DB file is rebuilt so the command can be rerun predictably for the demo.
+    if db_path.exists():
+        db_path.unlink()
+    try:
+        with sqlite3.connect(db_path) as connection:
+            connection.executescript(seed_path.read_text(encoding="utf-8"))
+            count = connection.execute("SELECT COUNT(*) FROM mentions").fetchone()[0]
+    except Exception:
+        db_path.unlink(missing_ok=True)
+        raise
+    print(f"SQLite database created at {db_path}")
+    print(f"Seeded {count:,} mention records from {seed_path.name}")
 
 if __name__ == "__main__":
     seed()
