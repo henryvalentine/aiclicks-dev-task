@@ -1,11 +1,29 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node / Next.js
 node_modules/
 .next/
 dist/
-venv/
-__pycache__/
-*.pyc
-*.db
+
+# Local configuration and secrets
 .env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
 .DS_Store
-SCORECARD.md
-forum-post-draft.md
+
+# Local database files / backups
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.dump
+*.backup
