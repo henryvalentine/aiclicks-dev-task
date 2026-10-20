@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { filtersToRequest, postJson } from "@/lib/format";
 import type { GroupBy, Mention, MentionFilters, MentionsResponse, TrendPoint, TrendsResponse } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 const PAGE_SIZE = 25;
 
 type MentionsState = {
