@@ -1,48 +1,40 @@
-// Types matching the backend API contract
+export type ModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
+export type SentimentName = "positive" | "neutral" | "negative";
+export type GroupBy = "day" | "week";
 
-export interface MentionFilters {
-  model?: "chatgpt" | "claude" | "gemini" | "perplexity";
-  sentiment?: "positive" | "neutral" | "negative";
-  date_from?: string; // YYYY-MM-DD
-  date_to?: string; // YYYY-MM-DD
-}
+export type MentionFilters = {
+  model: string;
+  sentiment: string;
+  date_from: string;
+  date_to: string;
+};
 
-export interface MentionsRequest {
-  page: number;
-  per_page: number;
-  filters?: MentionFilters;
-}
-
-export interface Mention {
+export type Mention = {
   id: string;
   query_text: string;
-  model: string;
+  model: ModelName;
   mentioned: boolean;
   position: number | null;
-  sentiment: string | null;
+  sentiment: SentimentName | null;
   citation_url: string | null;
+  /** The fixture's timestamps are timezone-naive source wall times. */
   created_at: string;
-}
+};
 
-export interface MentionsResponse {
+export type MentionsResponse = {
   data: Mention[];
   total: number;
+  mentioned_count: number;
+  /** Percentage for every record matching the applied filters, not just the current page. */
+  mention_rate: number;
   page: number;
   per_page: number;
-}
+};
 
-export interface TrendsRequest {
-  date_from?: string;
-  date_to?: string;
-  group_by: "day" | "week";
-}
-
-export interface TrendPoint {
+export type TrendPoint = {
   date: string;
   total: number;
   mentioned: number;
-}
+};
 
-export interface TrendsResponse {
-  data: TrendPoint[];
-}
+export type TrendsResponse = { data: TrendPoint[] };

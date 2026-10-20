@@ -1,0 +1,19 @@
+[Unit]
+Description=AIClicks FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiclicks
+Group=aiclicks
+WorkingDirectory=/opt/aiclicks/app/backend
+EnvironmentFile=/etc/aiclicks-api.env
+ExecStart=/opt/aiclicks/app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8800
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

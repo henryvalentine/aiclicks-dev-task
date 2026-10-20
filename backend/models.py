@@ -51,6 +51,8 @@ class Mention(BaseModel):
 class MentionsResponse(BaseModel):
     data: list[Mention]
     total: int
+    mentioned_count: int
+    mention_rate: float
     page: int
     per_page: int
 

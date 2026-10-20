@@ -3,22 +3,13 @@
 WARNING: This command intentionally recreates the database. It is an initialization/reset
 command, not a normal application startup or deployment command.
 """
-import os
 import sqlite3
 from pathlib import Path
 
-from dotenv import load_dotenv
+from db_config import BACKEND_DIR, database_path
 
-BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BACKEND_DIR.parent
-load_dotenv(BACKEND_DIR / ".env")
 
-def database_path() -> Path:
-    configured_value = os.getenv("MENTIONS_DB_PATH") or str(BACKEND_DIR / "mentions.db")
-    configured = Path(configured_value).expanduser()
-    if not configured.is_absolute():
-        configured = BACKEND_DIR / configured
-    return configured.resolve()
 
 def seed() -> None:
     db_path = database_path()
@@ -40,6 +31,7 @@ def seed() -> None:
         raise
     print(f"SQLite database created at {db_path}")
     print(f"Seeded {count:,} mention records from {seed_path.name}")
+
 
 if __name__ == "__main__":
     seed()

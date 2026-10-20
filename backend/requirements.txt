@@ -1,5 +1,7 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-aiosqlite==0.20.0
-pydantic==2.9.0
-python-dotenv==1.0.1
+# Pydantic 2.9.0 pins pydantic-core too old for Python 3.14. These versions
+# support Python 3.10-3.14 and retain the Pydantic v2 API used by the project.
+fastapi==0.136.3
+uvicorn[standard]==0.53.0
+aiosqlite==0.21.0
+pydantic==2.14.1
+python-dotenv==1.1.1

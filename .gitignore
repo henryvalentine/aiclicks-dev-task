@@ -9,6 +9,7 @@ __pycache__/
 node_modules/
 .next/
 dist/
+*.tsbuildinfo
 
 # Local configuration and secrets
 .env
@@ -27,3 +28,7 @@ dist/
 *.sqlite3
 *.dump
 *.backup
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
