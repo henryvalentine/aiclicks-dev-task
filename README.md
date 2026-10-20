@@ -24,12 +24,12 @@ python -m venv .venv
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python seed_db.py
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8800
 ```
 
-`seed_db.py` creates `backend/mentions.db` from the supplied `seed_data.sql` at the repository root. It deliberately recreates the database, so running it again resets the exercise data. Do not run it against a database containing data you need to preserve. For a custom database location, set `MENTIONS_DB_PATH` before running both the seed script and API. The API fails at startup with a direct message if the database has not been initialized.
+`seed_db.py` creates `backend/mentions.db` from the supplied `seed_data.sql` at the repository root. It deliberately recreates the database, so running it again resets the exercise data. Therefore, this shpould not be ran against a database containing data you need to preserve. For a custom database location, set `MENTIONS_DB_PATH` before running both the seed script and API. The API fails at startup with a direct message if the database has not been initialized.
 
-API docs: <http://localhost:8000/docs>; health check: <http://localhost:8000/health>.
+API docs: <http://localhost:8800/docs>; health check: <http://localhost:8800/health>.
 
 ### 2. Start the dashboard
 
@@ -41,7 +41,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. The frontend uses `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:8000`. For production builds, set that variable to the public API origin (or same-origin URL if Nginx proxies API paths).
+Open <http://localhost:3340>. The frontend uses `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:8800`. For production builds, set that variable to the public API origin (or same-origin URL if Nginx proxies API paths).
 
 ### 3. Run checks
 
@@ -64,7 +64,7 @@ The backend tests create and seed a temporary database from the provided SQL fil
 
 ## Production deployment
 
-For the OCI deployment at `https://aiclicks.terrainica.com`, see [`docs/OCI_DEPLOYMENT.md`](docs/OCI_DEPLOYMENT.md). The deployed ports are `127.0.0.1:3340` for AIClicks Next.js and `127.0.0.1:8800` for FastAPI; do not take over Terrainica's existing port `3000`. If deployed with SQLite, store `mentions.db` on persistent disk, set explicit file and directory permissions, and arrange backups. Keep the database out of the Git repository. Nginx can serve the Next.js app and proxy API routes to FastAPI.
+The demo app is deployed as a sub-domain `https://aiclicks.terrainica.com`.
 
 ## Repository files
 
