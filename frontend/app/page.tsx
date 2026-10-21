@@ -20,20 +20,11 @@ const DEFAULT_FILTERS: MentionFilters = {
   query: "",
 };
 
-// The screenshot shows this selected state. The underlying counts always come from the API.
-const SCREENSHOT_FILTERS: MentionFilters = {
-  models: ["gemini", "perplexity"],
-  sentiments: ["neutral", "positive"],
-  date_from: "2025-01-01",
-  date_to: "2025-03-31",
-  query: "",
-};
-
 type DateDraft = { date_from: string; date_to: string };
 
 export default function Dashboard() {
-  const [filters, setFilters] = useState<MentionFilters>(SCREENSHOT_FILTERS);
-  const [dateDraft, setDateDraft] = useState<DateDraft>({ date_from: SCREENSHOT_FILTERS.date_from, date_to: SCREENSHOT_FILTERS.date_to });
+  const [filters, setFilters] = useState<MentionFilters>(DEFAULT_FILTERS);
+  const [dateDraft, setDateDraft] = useState<DateDraft>({ date_from: DEFAULT_FILTERS.date_from, date_to: DEFAULT_FILTERS.date_to });
   const [searchDraft, setSearchDraft] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
@@ -61,7 +52,7 @@ export default function Dashboard() {
     setExportError("");
   }, [filters.query]);
 
-  // The active-chip "Clear all" follows the Lovable source and preserves the submitted search.
+  // The active-chip "Clear all" preserves the submitted search.
   const clearFilterSelections = useCallback(() => {
     setFilters((current) => ({ ...DEFAULT_FILTERS, query: current.query }));
     setDateDraft({ date_from: DEFAULT_FILTERS.date_from, date_to: DEFAULT_FILTERS.date_to });
