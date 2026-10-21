@@ -67,7 +67,7 @@ export async function postJson<T>(url: string, body: unknown, signal: AbortSigna
   return payload as T;
 }
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_BASE = API_BASE = "/api";
 
 export function filtersToRequest(filters: MentionFilters): Record<string, unknown> {
   const request: Record<string, unknown> = {};
