@@ -1,38 +1,35 @@
-/** Format a YYYY-MM-DD trend label without shifting the calendar day by timezone. */
+import type { MentionFilters } from "@/lib/types";
+
+/** Search is a case-insensitive literal phrase; strip punctuation before sending it to the API. */
+export function sanitizeSearchQuery(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+/** Format YYYY-MM-DD trend labels without shifting the calendar day by the browser timezone. */
 export function formatShortDate(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return value;
   const [, year, month, day] = match;
-  const valueAsUtcDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(valueAsUtcDate);
+  const stableDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", timeZone: "UTC",
+  }).format(stableDate);
 }
 
-/**
- * Preserve the source's timezone-naive timestamp fields. These fixture values are wall times,
- * not UTC instants, so parsing them as UTC and converting to the browser timezone can change
- * the displayed date and make it disagree with date filters.
- */
+/** Render source wall-time components consistently. No local timezone conversion is applied. */
 export function formatSourceTimestamp(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/.exec(value);
-  if (!match) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" });
-  }
+  if (!match) return value;
   const [, year, month, day, hour, minute, second = "0"] = match;
-  // Use UTC only as a stable formatting container; the source fields are not asserted to be UTC.
-  const wallTime = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(wallTime);
+  const stableDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+  }).format(stableDate);
 }
 
 export function safeCitationUrl(value: string | null): URL | null {
@@ -48,45 +45,57 @@ export function safeCitationUrl(value: string | null): URL | null {
 function formatValidationDetail(detail: unknown): string | null {
   if (typeof detail === "string") return detail;
   if (!Array.isArray(detail)) return null;
-
   const messages = detail.map((item) => {
     if (!item || typeof item !== "object") return null;
     const entry = item as { loc?: unknown[]; msg?: unknown };
     if (typeof entry.msg !== "string") return null;
-    const path = Array.isArray(entry.loc)
-      ? entry.loc.filter((part) => part !== "body").map(String).join(" → ")
-      : "";
+    const path = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== "body").map(String).join(" → ") : "";
     return path ? `${path}: ${entry.msg}` : entry.msg;
   }).filter((item): item is string => Boolean(item));
-
   return messages.length ? messages.join("; ") : null;
 }
 
 export async function postJson<T>(url: string, body: unknown, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal,
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail = payload && typeof payload === "object" && "detail" in payload
-      ? (payload as { detail: unknown }).detail
-      : null;
-    const message = formatValidationDetail(detail);
-    throw new Error(message ?? `The request failed (HTTP ${response.status}). Please try again.`);
+    const detail = payload && typeof payload === "object" && "detail" in payload ? (payload as { detail: unknown }).detail : null;
+    throw new Error(formatValidationDetail(detail) ?? `The request failed (HTTP ${response.status}).`);
   }
   return payload as T;
 }
 
-export function filtersToRequest(filters: {
-  model: string;
-  sentiment: string;
-  date_from: string;
-  date_to: string;
-}): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(filters).filter(([, value]) => Boolean(value)),
-  );
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export function filtersToRequest(filters: MentionFilters): Record<string, unknown> {
+  const request: Record<string, unknown> = {};
+  if (filters.models.length) request.models = filters.models;
+  if (filters.sentiments.length) request.sentiments = filters.sentiments;
+  if (filters.date_from) request.date_from = filters.date_from;
+  if (filters.date_to) request.date_to = filters.date_to;
+  const query = sanitizeSearchQuery(filters.query);
+  if (query) request.query = query;
+  return request;
+}
+
+export async function downloadMentionsCsv(filters: MentionFilters): Promise<void> {
+  const response = await fetch(`${API_BASE}/mentions/export`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(filtersToRequest(filters)),
+  });
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const detail = payload && typeof payload === "object" && "detail" in payload ? (payload as { detail: unknown }).detail : null;
+    throw new Error(formatValidationDetail(detail) ?? `CSV export failed (HTTP ${response.status}).`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "aiclicks-mentions.csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

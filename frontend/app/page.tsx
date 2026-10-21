@@ -1,103 +1,196 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
-import { DashboardHeader } from "@/components/dashboard-header";
-import { FilterBar } from "@/components/filter-bar";
+import { Download, PanelLeft, Search, SlidersHorizontal, X } from "lucide-react";
+import { ActiveChips } from "@/components/active-chips";
+import { FilterSidebar } from "@/components/filter-sidebar";
 import { MentionsTable } from "@/components/mentions-table";
 import { SummaryCards } from "@/components/summary-cards";
 import { TrendPanel } from "@/components/trend-panel";
+import { downloadMentionsCsv, sanitizeSearchQuery } from "@/lib/format";
 import { useDashboardData } from "@/lib/use-dashboard-data";
 import type { GroupBy, MentionFilters } from "@/lib/types";
 
-const PAGE_SIZE = 25;
-const emptyFilters: MentionFilters = { model: "", sentiment: "", date_from: "", date_to: "" };
+const DEFAULT_FILTERS: MentionFilters = {
+  models: [],
+  sentiments: [],
+  date_from: "2025-01-01",
+  date_to: "2025-03-31",
+  query: "",
+};
 
-function validateFilters(filters: MentionFilters): string {
-  if (filters.date_from && filters.date_to && filters.date_from > filters.date_to) {
-    return "The start date must be on or before the end date. Update the dates and apply your filters again.";
-  }
-  return "";
-}
+// The screenshot shows this selected state. The underlying counts always come from the API.
+const SCREENSHOT_FILTERS: MentionFilters = {
+  models: ["gemini", "perplexity"],
+  sentiments: ["neutral", "positive"],
+  date_from: "2025-01-01",
+  date_to: "2025-03-31",
+  query: "",
+};
+
+type DateDraft = { date_from: string; date_to: string };
 
 export default function Dashboard() {
-  const [filters, setFilters] = useState<MentionFilters>(emptyFilters);
-  const [draft, setDraft] = useState<MentionFilters>(emptyFilters);
+  const [filters, setFilters] = useState<MentionFilters>(SCREENSHOT_FILTERS);
+  const [dateDraft, setDateDraft] = useState<DateDraft>({ date_from: SCREENSHOT_FILTERS.date_from, date_to: SCREENSHOT_FILTERS.date_to });
+  const [searchDraft, setSearchDraft] = useState("");
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const [groupBy, setGroupBy] = useState<GroupBy>("day");
-  const [filterError, setFilterError] = useState("");
-  const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
-  const { mentions, trends, retryMentions, retryTrends } = useDashboardData(filters, page, groupBy);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
-  function updateDraft(key: keyof MentionFilters, value: string) {
-    setDraft((current) => ({ ...current, [key]: value }));
-    setFilterError("");
-  }
+  const { mentions, trends } = useDashboardData(filters, page, perPage, groupBy);
 
-  function applyFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const validationMessage = validateFilters(draft);
-    if (validationMessage) {
-      setFilterError(validationMessage);
-      return;
+  const changeAppliedFilters = useCallback((next: MentionFilters) => {
+    if (next.date_from !== filters.date_from || next.date_to !== filters.date_to) {
+      setDateDraft({ date_from: next.date_from, date_to: next.date_to });
     }
-    setFilterError("");
-    setFilters({ ...draft });
+    setFilters(next);
     setPage(1);
+    setExportError("");
+  }, [filters]);
+
+  const resetFilters = useCallback(() => {
+    setFilters({ ...DEFAULT_FILTERS, query: filters.query });
+    setDateDraft({ date_from: DEFAULT_FILTERS.date_from, date_to: DEFAULT_FILTERS.date_to });
+    setPage(1);
+    setExportError("");
+  }, [filters.query]);
+
+  // The active-chip "Clear all" follows the Lovable source and preserves the submitted search.
+  const clearFilterSelections = useCallback(() => {
+    setFilters((current) => ({ ...DEFAULT_FILTERS, query: current.query }));
+    setDateDraft({ date_from: DEFAULT_FILTERS.date_from, date_to: DEFAULT_FILTERS.date_to });
+    setPage(1);
+    setExportError("");
+  }, []);
+
+  // The no-results recovery action clears the search as well as the filter selections.
+  const clearEverything = useCallback(() => {
+    setFilters({ ...DEFAULT_FILTERS });
+    setDateDraft({ date_from: DEFAULT_FILTERS.date_from, date_to: DEFAULT_FILTERS.date_to });
+    setSearchDraft("");
+    setPage(1);
+    setExportError("");
+  }, []);
+
+  const updateDateDraft = useCallback((next: DateDraft) => {
+    setDateDraft(next);
+  }, []);
+
+  const applyValidatedDate = useCallback((next: DateDraft) => {
+    if (!next.date_from || !next.date_to || next.date_from > next.date_to) return;
+    setFilters((current) => ({ ...current, date_from: next.date_from, date_to: next.date_to }));
+    setPage(1);
+    setExportError("");
+  }, []);
+
+  function search(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = sanitizeSearchQuery(searchDraft);
+    setSearchDraft(query);
+    changeAppliedFilters({ ...filters, query });
   }
 
-  function clearFilters() {
-    setDraft(emptyFilters);
-    setFilters(emptyFilters);
-    setFilterError("");
-    setPage(1);
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      await downloadMentionsCsv(filters);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setExportError(message);
+    } finally {
+      setExporting(false);
+    }
   }
+
+  const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
   return (
-    <div id="top" className="min-h-screen bg-slate-50 text-slate-900">
-      <DashboardHeader />
-      <div className="min-h-screen lg:pl-64">
-        <div className="sticky top-0 z-20 hidden h-[56px] items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur lg:flex xl:px-8">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span>Workspace</span><span aria-hidden="true">/</span><span className="font-semibold text-slate-700">Dashboard</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            <span>Brand visibility on AI engines</span>
-            <span className="mx-1 text-slate-300"></span>
-            <span></span>
-          </div>
-        </div>
+    <div className="flex min-h-svh w-full bg-background text-foreground">
+      <div className={`hidden shrink-0 transition-[width] duration-200 ease-linear md:block ${sidebarExpanded ? "w-64" : "w-12"}`} />
+      <FilterSidebar
+        filters={filters}
+        dateDraft={dateDraft}
+        expanded={sidebarExpanded}
+        mobileOpen={mobileSidebarOpen}
+        resultCount={mentions.total}
+        onChange={changeAppliedFilters}
+        onDateDraftChange={updateDateDraft}
+        onValidatedDateChange={applyValidatedDate}
+        onReset={resetFilters}
+        onToggleExpanded={() => setSidebarExpanded(true)}
+        onCloseMobile={closeMobileSidebar}
+      />
 
-        <main className="mx-auto max-w-[1600px] space-y-5 px-4 py-5 sm:px-6 sm:py-7 xl:px-8">
-          <section aria-labelledby="page-title" className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6">
+          <button type="button" onClick={() => setSidebarExpanded((value) => !value)} className="hidden cursor-pointer size-7 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent md:inline-flex" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <PanelLeft className="size-4" />
+          </button>
+          <div className="hidden h-5 w-px bg-border md:block" />
+          <form onSubmit={search} className="relative max-w-md flex-1">
+            <button type="submit" aria-label="Search queries" title="Search queries" className="absolute left-3 top-1/2 grid size-4 -translate-y-1/2 place-items-center text-muted-foreground">
+              <Search className="size-4" />
+            </button>
+            <input
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder="Search queries…"
+              aria-label="Search queries"
+              maxLength={200}
+              className="h-9 w-full rounded-lg border bg-card pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/15"
+            />
+          </form>
+          <button type="button" onClick={() => setMobileSidebarOpen(true)} className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:hidden">
+            <SlidersHorizontal className="size-4" /> Filters
+          </button>
+          <div className="ml-auto hidden size-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold sm:grid">HO</div>
+        </header>
+
+        <main className="mx-auto w-full max-w-[1400px] space-y-4 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-400">
-                <span className="rounded-md bg-teal-50 px-2 py-1 font-semibold text-teal-700">Overview</span>
-                <span aria-hidden="true">/</span>
-                <span>AI response monitoring</span>
-              </div>
-              <h1 id="page-title" className="m-0 text-2xl font-bold tracking-tight text-slate-950 sm:text-[30px]">Brand mentions overview</h1>
-              <p className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-slate-500">Explore how AI responses mention brands, compare model output, and inspect the prompts and citations behind each record.</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Q1 2025 · BLOOMBERG</p>
+              <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">Brand mentions</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-500 sm:self-auto">
-              <span className="grid size-7 place-items-center rounded-lg bg-teal-50 font-bold text-teal-700">10k</span>
-              <span><strong className="block text-slate-800">Historical sample</strong><span className="mt-0.5 block">10,000 responses</span></span>
-            </div>
-          </section>
+            <button type="button" onClick={exportCsv} disabled={exporting} className="inline-flex cursor-pointer h-8 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-wait disabled:opacity-60">
+              <Download className="size-4" /> Export CSV
+            </button>
+          </div>
 
-          <FilterBar draft={draft} activeFilterCount={activeFilterCount} validationError={filterError} onDraftChange={updateDraft} onApply={applyFilters} onReset={clearFilters} />
+          <ActiveChips filters={filters} onChange={changeAppliedFilters} onClearAll={clearFilterSelections} />
+          {exportError && <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"><span className="flex-1">{exportError}</span><button type="button" aria-label="Dismiss" onClick={() => setExportError("")}><X className="size-4" /></button></div>}
 
-          <SummaryCards total={mentions.total} mentionedCount={mentions.mentionedCount} mentionRate={mentions.mentionRate} visibleCount={mentions.data.length} loading={mentions.loading} error={mentions.error} />
+          <SummaryCards
+            total={mentions.total}
+            mentionedCount={mentions.mentionedCount}
+            mentionRate={mentions.mentionRate}
+            averagePosition={mentions.averagePosition}
+            positiveSentimentRate={mentions.positiveSentimentRate}
+            modelRates={mentions.modelRates}
+            loading={mentions.loading || Boolean(mentions.error)}
+          />
 
-          <TrendPanel data={trends.data} groupBy={groupBy} loading={trends.loading} error={trends.error} onGroupByChange={setGroupBy} onRetry={retryTrends} />
+          <TrendPanel data={trends.data} groupBy={groupBy} loading={trends.loading} error={trends.error} onGroupByChange={setGroupBy} />
 
-          <MentionsTable data={mentions.data} loading={mentions.loading} error={mentions.error} page={page} pageSize={PAGE_SIZE} total={mentions.total} onPageChange={setPage} onResetFilters={clearFilters} onRetry={retryMentions} />
-
-          <footer id="dataset-info" className="flex flex-col justify-between gap-2 border-t border-slate-200 pt-4 text-xs text-slate-400 sm:flex-row sm:items-center">
-            <span className="font-semibold text-slate-500">AI Clicks <span className="mx-1 text-slate-300">·</span> Brand intelligence</span>
-            <span className="font-semibold text-slate-500"> Built for clarity and simplicity.</span>
-          </footer>
+          <MentionsTable
+            rows={mentions.data}
+            total={mentions.total}
+            page={page}
+            perPage={perPage}
+            loading={mentions.loading}
+            error={mentions.error}
+            onPage={setPage}
+            onPerPage={(value) => { setPerPage(value); setPage(1); }}
+            onReset={clearEverything}
+          />
         </main>
       </div>
     </div>

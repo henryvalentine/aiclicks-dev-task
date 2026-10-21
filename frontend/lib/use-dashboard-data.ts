@@ -1,27 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { filtersToRequest, postJson } from "@/lib/format";
-import type { GroupBy, Mention, MentionFilters, MentionsResponse, TrendPoint, TrendsResponse } from "@/lib/types";
-
-const API_BASE = "/api";
-const PAGE_SIZE = 25;
+import { API_BASE, filtersToRequest, postJson } from "@/lib/format";
+import type {
+  GroupBy,
+  Mention,
+  MentionFilters,
+  MentionsResponse,
+  ModelRate,
+  TrendPoint,
+  TrendsResponse,
+} from "@/lib/types";
 
 type MentionsState = {
   data: Mention[];
   total: number;
   mentionedCount: number;
   mentionRate: number;
+  averagePosition: number | null;
+  positiveSentimentRate: number;
+  modelRates: ModelRate[];
   loading: boolean;
   error: string;
 };
 
 type TrendsState = { data: TrendPoint[]; loading: boolean; error: string };
+const emptyMentions: MentionsState = {
+  data: [], total: 0, mentionedCount: 0, mentionRate: 0, averagePosition: null,
+  positiveSentimentRate: 0, modelRates: [], loading: true, error: "",
+};
 
-export function useDashboardData(filters: MentionFilters, page: number, groupBy: GroupBy) {
-  const [mentions, setMentions] = useState<MentionsState>({
-    data: [], total: 0, mentionedCount: 0, mentionRate: 0, loading: true, error: "",
-  });
+export function useDashboardData(filters: MentionFilters, page: number, perPage: number, groupBy: GroupBy) {
+  const [mentions, setMentions] = useState<MentionsState>(emptyMentions);
   const [trends, setTrends] = useState<TrendsState>({ data: [], loading: true, error: "" });
   const [mentionsRetryKey, setMentionsRetryKey] = useState(0);
   const [trendsRetryKey, setTrendsRetryKey] = useState(0);
@@ -33,7 +43,7 @@ export function useDashboardData(filters: MentionFilters, page: number, groupBy:
       try {
         const result = await postJson<MentionsResponse>(`${API_BASE}/mentions`, {
           page,
-          per_page: PAGE_SIZE,
+          per_page: perPage,
           filters: filtersToRequest(filters),
         }, controller.signal);
         setMentions({
@@ -41,18 +51,21 @@ export function useDashboardData(filters: MentionFilters, page: number, groupBy:
           total: result.total,
           mentionedCount: result.mentioned_count,
           mentionRate: result.mention_rate,
+          averagePosition: result.average_position,
+          positiveSentimentRate: result.positive_sentiment_rate,
+          modelRates: result.model_rates,
           loading: false,
           error: "",
         });
       } catch (error) {
         if (controller.signal.aborted) return;
-        setMentions({ data: [], total: 0, mentionedCount: 0, mentionRate: 0, loading: false,
+        setMentions({ ...emptyMentions, loading: false,
           error: error instanceof Error ? error.message : "Could not load mention records." });
       }
     }
     void load();
     return () => controller.abort();
-  }, [filters, page, mentionsRetryKey]);
+  }, [filters, page, perPage, mentionsRetryKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,8 +73,7 @@ export function useDashboardData(filters: MentionFilters, page: number, groupBy:
       setTrends((current) => ({ ...current, loading: true, error: "" }));
       try {
         const result = await postJson<TrendsResponse>(`${API_BASE}/mentions/trends`, {
-          ...(filters.date_from ? { date_from: filters.date_from } : {}),
-          ...(filters.date_to ? { date_to: filters.date_to } : {}),
+          ...filtersToRequest(filters),
           group_by: groupBy,
         }, controller.signal);
         setTrends({ data: result.data, loading: false, error: "" });
@@ -73,7 +85,7 @@ export function useDashboardData(filters: MentionFilters, page: number, groupBy:
     }
     void load();
     return () => controller.abort();
-  }, [filters.date_from, filters.date_to, groupBy, trendsRetryKey]);
+  }, [filters, groupBy, trendsRetryKey]);
 
   const retryMentions = useCallback(() => setMentionsRetryKey((value) => value + 1), []);
   const retryTrends = useCallback(() => setTrendsRetryKey((value) => value + 1), []);

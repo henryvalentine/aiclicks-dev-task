@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import main
 from db_config import readonly_database_uri
+from models import MentionFilters
 
 SEED_SQL = Path(main.__file__).resolve().parent.parent / "seed_data.sql"
 
@@ -52,6 +53,9 @@ def test_pagination_and_response_contract(client):
     assert body["page"] == 1 and body["per_page"] == 10
     assert body["mentioned_count"] > 0
     assert body["mention_rate"] == pytest.approx(body["mentioned_count"] / body["total"] * 100, abs=0.1)
+    assert body["average_position"] is not None
+    assert 0 <= body["positive_sentiment_rate"] <= 100
+    assert {item["model"] for item in body["model_rates"]} == {"chatgpt", "claude", "gemini", "perplexity"}
     assert isinstance(body["data"][0]["mentioned"], bool)
     assert set(body["data"][0]) == {
         "id", "query_text", "model", "mentioned", "position", "sentiment", "citation_url", "created_at"
@@ -130,3 +134,122 @@ def test_empty_results_return_valid_response(client):
     assert body["mentioned_count"] == 0
     assert body["mention_rate"] == 0
     assert body["page"] == 1
+
+
+def test_multi_select_filters_and_literal_query_search(client):
+    response = client.post("/mentions", json={
+        "page": 1,
+        "per_page": 100,
+        "filters": {
+            "models": ["chatgpt", "gemini"],
+            "sentiments": ["positive", "neutral"],
+            "date_from": "2025-03-01",
+            "date_to": "2025-03-31",
+            "query": "project management",
+        },
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]
+    assert all(row["model"] in {"chatgpt", "gemini"} for row in body["data"])
+    assert all(row["sentiment"] in {"positive", "neutral"} for row in body["data"])
+    assert all("project management" in row["query_text"].lower() for row in body["data"])
+    assert all(row["created_at"][:10].startswith("2025-03-") for row in body["data"])
+
+
+def test_trends_apply_the_same_model_sentiment_and_query_filters(client):
+    response = client.post("/mentions/trends", json={
+        "date_from": "2025-03-01",
+        "date_to": "2025-03-07",
+        "models": ["claude"],
+        "sentiments": ["positive"],
+        "query": "project management",
+        "group_by": "day",
+    })
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) <= 7
+    with sqlite3.connect(main.DB_PATH) as connection:
+        expected = connection.execute(
+            """SELECT COUNT(*), COALESCE(SUM(CASE WHEN mentioned = 1 THEN 1 ELSE 0 END), 0)
+               FROM mentions WHERE model = ? AND sentiment = ? AND created_at >= ?
+               AND created_at < ? AND instr(lower(query_text), lower(?)) > 0""",
+            ("claude", "positive", "2025-03-01", "2025-03-08", "project management"),
+        ).fetchone()
+    assert sum(point["total"] for point in data) == expected[0]
+    assert sum(point["mentioned"] for point in data) == expected[1]
+
+
+def test_model_comparison_uses_the_same_model_and_sentiment_filters(client):
+    response = client.post("/mentions", json={
+        "filters": {
+            "models": ["chatgpt"],
+            "sentiments": ["negative"],
+            "date_from": "2025-01-01",
+            "date_to": "2025-03-31",
+        }
+    })
+    assert response.status_code == 200
+    body = response.json()
+    model_rates = {row["model"]: row for row in body["model_rates"]}
+    assert model_rates["chatgpt"]["total"] == body["total"]
+    assert model_rates["chatgpt"]["mentioned_count"] == body["mentioned_count"]
+    assert model_rates["chatgpt"]["mention_rate"] == body["mention_rate"]
+    assert model_rates["gemini"]["total"] == 0
+    assert model_rates["gemini"]["mention_rate"] == 0
+
+
+def test_export_returns_filtered_csv(client):
+    response = client.post("/mentions/export", json={
+        "models": ["claude"],
+        "date_from": "2025-01-01",
+        "date_to": "2025-03-31",
+    })
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert 'attachment; filename="aiclicks-mentions.csv"' in response.headers["content-disposition"]
+    content = response.content.decode("utf-8-sig")
+    lines = content.splitlines()
+    assert lines[0] == "id,query_text,model,mentioned,position,sentiment,citation_url,created_at"
+    assert len(lines) > 1
+    assert all(",claude," in line for line in lines[1:])
+    assert all(",2025-" in line for line in lines[1:])
+
+
+def test_conflicting_singular_and_multi_select_filters_are_rejected(client):
+    response = client.post("/mentions", json={
+        "filters": {"model": "chatgpt", "models": ["claude"]}
+    })
+    assert response.status_code == 422
+
+
+def test_search_query_is_lowercased_and_sanitized(client):
+    response = client.post("/mentions", json={
+        "page": 1,
+        "per_page": 100,
+        "filters": {"query": "PROJECT management!!"},
+    })
+    assert response.status_code == 200
+    rows = response.json()["data"]
+    assert rows
+    assert all("project management" in row["query_text"].lower() for row in rows)
+
+
+def test_search_sanitization_removes_sql_like_punctuation(client):
+    response = client.post("/mentions", json={
+        "page": 1,
+        "per_page": 100,
+        "filters": {"query": "project%' OR 1=1 -- management"},
+    })
+    assert response.status_code == 200
+    body = response.json()
+    # The query is normalized into a safe literal phrase and cannot turn into a SQL predicate.
+    assert body["total"] < 10000
+    assert all("project or 11 management" in row["query_text"].lower() for row in body["data"])
+
+
+def test_search_query_normalization_removes_punctuation_and_lowercases():
+    filters = MentionFilters(query="PROJECT management!!")
+    assert filters.query == "project management"
+    injection_like = MentionFilters(query="PROJECT%' OR 1=1 -- management")
+    assert injection_like.query == "project or 11 management"

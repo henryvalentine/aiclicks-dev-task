@@ -1,40 +1,74 @@
-import { UiIcon } from "@/components/ui-icons";
+"use client";
 
-const numberFormat = new Intl.NumberFormat("en-US");
+import type { ModelName, ModelRate } from "@/lib/types";
 
-type SummaryCardsProps = {
+const MODELS: { id: ModelName; label: string; dot: string }[] = [
+  { id: "chatgpt", label: "ChatGPT", dot: "bg-chatgpt" },
+  { id: "claude", label: "Claude", dot: "bg-claude" },
+  { id: "gemini", label: "Gemini", dot: "bg-gemini" },
+  { id: "perplexity", label: "Perplexity", dot: "bg-perplexity" },
+];
+
+export function SummaryCards({
+  total, mentionedCount, mentionRate, averagePosition, positiveSentimentRate, modelRates, loading,
+}: {
   total: number;
   mentionedCount: number;
   mentionRate: number;
-  visibleCount: number;
+  averagePosition: number | null;
+  positiveSentimentRate: number;
+  modelRates: ModelRate[];
   loading: boolean;
-  error: string;
-};
-
-const cardDetails = [
-  { label: "Matching responses", note: "All records matching filters", icon: "response" as const },
-  { label: "Brand mentions", note: "Responses where a brand appeared", icon: "mention" as const },
-  { label: "Mention rate", note: "Across all matching responses", icon: "rate" as const },
-  { label: "On this page", note: "Rows currently displayed", icon: "records" as const },
-];
-
-export function SummaryCards({ total, mentionedCount, mentionRate, visibleCount, loading, error }: SummaryCardsProps) {
-  const unavailable = loading || Boolean(error);
-  const values = [numberFormat.format(total), numberFormat.format(mentionedCount), `${mentionRate.toFixed(1)}%`, numberFormat.format(visibleCount)];
+}) {
+  const rates = new Map(modelRates.map((item) => [item.model, item]));
   return (
-    <section id="overview" aria-label="Summary metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {cardDetails.map((card, index) => (
-        <article key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.025] transition hover:border-slate-300 sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="m-0 text-sm font-semibold text-slate-600">{card.label}</p>
-            <span className={`grid size-9 place-items-center rounded-xl ${index === 2 ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}><UiIcon name={card.icon} className="size-[18px]" /></span>
-          </div>
-          <p className={`m-0 text-[30px] font-bold leading-none tracking-tight ${index === 2 ? "text-teal-700" : "text-slate-950"}`} aria-live="polite">
-            {unavailable ? <span className="text-slate-300">—</span> : values[index]}
-          </p>
-          <p className="mb-0 mt-2.5 text-xs leading-5 text-slate-400">{card.note}</p>
-        </article>
-      ))}
+    <section id="overview" className="grid scroll-mt-24 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="relative overflow-hidden rounded-xl bg-primary p-5 text-primary-foreground shadow-card">
+        <p className="text-xs font-medium uppercase tracking-wider opacity-70">Mention rate</p>
+        {loading ? <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-primary-foreground/15" /> : (
+          <p className="num mt-2 text-4xl font-semibold tracking-tight">{mentionRate.toFixed(1)}<span className="text-xl opacity-60">%</span></p>
+        )}
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-primary-foreground/15">
+          <div className="h-full rounded-full bg-signal transition-[width] duration-700" style={{ width: `${loading ? 0 : Math.max(0, Math.min(100, mentionRate))}%` }} />
+        </div>
+        <p className="mt-2 text-xs opacity-60">of AI responses name your brand</p>
+      </div>
+
+      <Stat label="Responses tracked" value={total.toLocaleString()} hint={`${mentionedCount.toLocaleString()} with a mention`} loading={loading} />
+      <Stat label="Avg. position" value={averagePosition === null ? "—" : `#${averagePosition.toFixed(2)}`} hint="when mentioned, lower is better" loading={loading} />
+
+      <div className="surface p-5">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Rate by model</p>
+        <ul className="mt-3 space-y-2">
+          {MODELS.map((model) => {
+            const data = rates.get(model.id);
+            const rate = data?.mention_rate ?? 0;
+            return (
+              <li key={model.id} className="flex items-center gap-2 text-xs">
+                <span className={`size-1.5 rounded-full ${model.dot}`} />
+                <span className="w-16">{model.label}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full rounded-full transition-[width] duration-700 ${model.dot}`} style={{ width: loading ? "0%" : `${Math.max(0, Math.min(100, rate))}%` }} />
+                </div>
+                <span className="num w-10 text-right text-muted-foreground">{loading ? "··" : `${rate.toFixed(0)}%`}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          <span className="num text-positive">{positiveSentimentRate.toFixed(0)}%</span> positive sentiment overall
+        </p>
+      </div>
     </section>
+  );
+}
+
+function Stat({ label, value, hint, loading }: { label: string; value: string; hint: string; loading: boolean }) {
+  return (
+    <div className="surface p-5">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      {loading ? <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-muted" /> : <p className="num mt-2 text-4xl font-semibold tracking-tight">{value}</p>}
+      <p className="mt-6 text-xs text-muted-foreground">{hint}</p>
+    </div>
   );
 }

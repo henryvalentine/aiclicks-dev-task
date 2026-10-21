@@ -1,9 +1,14 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { TooltipProps } from "recharts";
 import { formatShortDate } from "@/lib/format";
 import type { GroupBy, TrendPoint } from "@/lib/types";
-import { UiIcon } from "@/components/ui-icons";
+
+const chartConfig = {
+  total: { label: "Responses", color: "var(--chart-1)" },
+  mentioned: { label: "Brand mentioned", color: "var(--chart-2)" },
+};
 
 type TrendPanelProps = {
   data: TrendPoint[];
@@ -11,60 +16,86 @@ type TrendPanelProps = {
   loading: boolean;
   error: string;
   onGroupByChange: (value: GroupBy) => void;
-  onRetry: () => void;
 };
 
-export function TrendPanel({ data, groupBy, loading, error, onGroupByChange, onRetry }: TrendPanelProps) {
+export function TrendPanel({ data, groupBy, loading, error, onGroupByChange }: TrendPanelProps) {
   return (
-    <section id="trends" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[0.025]">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-4 py-4 sm:px-5 sm:py-5">
+    <section id="trends" className="surface scroll-mt-24 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-teal-50 text-teal-700"><UiIcon name="trend" className="size-[17px]" /></span>
-            <p className="m-0 text-xs font-semibold text-teal-700">Performance overview</p>
+          <h2 className="font-display text-lg font-semibold tracking-tight">Visibility over time</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">Responses vs. responses that mention your brand</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="hidden items-center gap-4 text-xs text-muted-foreground sm:flex">
+            <Legend className="bg-chart-1" label="Responses" />
+            <Legend className="bg-chart-2" label="Mentioned" />
           </div>
-          <h2 className="m-0 text-lg font-bold tracking-tight text-slate-950 sm:text-xl">Brand mentions over time</h2>
-          <p className="mb-0 mt-1.5 max-w-xl text-sm leading-5 text-slate-500">Compare total AI responses with responses that mention the brand.</p>
-        </div>
-        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Trend interval">
-          {(["day", "week"] as const).map((interval) => (
-            <button key={interval} type="button" aria-pressed={groupBy === interval} onClick={() => onGroupByChange(interval)}
-              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${groupBy === interval ? "bg-white text-teal-700 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-800"}`}>
-              {interval === "day" ? "Daily" : "Weekly"}
-            </button>
-          ))}
+          <div className="flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Trend interval">
+            {(["day", "week"] as const).map((interval) => (
+              <button key={interval} type="button" role="tab" aria-selected={groupBy === interval} onClick={() => onGroupByChange(interval)} className={`rounded-md px-3 cursor-pointer py-1 text-xs font-medium capitalize transition-all ${groupBy === interval ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"}`}>
+                {interval === "day" ? "Daily" : "Weekly"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 px-4 pt-4 text-xs font-medium text-slate-500 sm:px-5">
-        <span className="inline-flex items-center gap-2"><i className="h-0.5 w-5 rounded-full bg-teal-500" />All responses</span>
-        <span className="inline-flex items-center gap-2"><i className="h-0.5 w-5 rounded-full bg-teal-500" />Brand mentioned</span>
+
+      <div className="mt-6 h-[260px] sm:h-[300px]">
+        {loading ? (
+          <div className="h-full w-full animate-pulse rounded-lg bg-muted/70" />
+        ) : error ? (
+          <div role="alert" className="grid h-full place-items-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">{error}</div>
+        ) : data.length === 0 ? (
+          <div className="grid h-full place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">No data for this range</div>
+        ) : (
+          <div className="h-full w-full [&_.recharts-surface]:outline-none">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data} margin={{ left: -16, right: 8, top: 8 }}>
+                <defs>
+                  <linearGradient id="fillMentioned" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="var(--border)" />
+                <XAxis dataKey="date" tickFormatter={formatShortDate} tickLine={false} axisLine={false} minTickGap={32} tickMargin={10} tick={{ fill: "var(--muted-foreground)" }} />
+                <YAxis tickLine={false} axisLine={false} width={44} tick={{ fill: "var(--muted-foreground)" }} />
+                <Tooltip cursor={{ strokeDasharray: "3 3", stroke: "var(--border)" }} content={<TrendTooltip />} />
+                <Area dataKey="mentioned" name="Brand mentioned" type="monotone" stroke="var(--chart-2)" strokeWidth={2} fill="url(#fillMentioned)" />
+                <Line dataKey="total" name="Responses" type="monotone" stroke="var(--chart-1)" strokeWidth={1.75} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
-      {loading ? (
-        <div className="grid h-[300px] place-items-center text-sm text-slate-500" role="status"><span className="flex items-center gap-3"><span className="size-4 animate-spin rounded-full border-2 border-slate-200 border-t-teal-600" />Loading trend data…</span></div>
-      ) : error ? (
-        <div className="grid min-h-[300px] place-content-center justify-items-center gap-3 px-6 text-center" role="alert">
-          <p className="m-0 max-w-xl text-sm text-rose-700">{error}</p>
-          <button onClick={onRetry} type="button" className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Retry trend request</button>
-        </div>
-      ) : data.length === 0 ? (
-        <div className="grid h-[300px] place-items-center px-6 text-center text-sm text-slate-500">No trend data for this date range.</div>
-      ) : (
-        <div className="h-[300px] w-full px-2 pb-4 pr-4 pt-2 sm:px-5">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 12, right: 10, left: -18, bottom: 2 }}>
-              <CartesianGrid stroke="#e9edf5" strokeDasharray="3 5" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={formatShortDate} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} tick={{ fill: "#94a3b8", fontSize: 11 }} minTickGap={28} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} allowDecimals={false} />
-              <Tooltip labelFormatter={(label) => formatShortDate(String(label))} contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 8px 24px #0f172a12", fontSize: 12 }} />
-              <Line type="monotone" dataKey="total" name="All responses" stroke="#3b82f6" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-              <Line type="monotone" dataKey="mentioned" name="Brand mentioned" stroke="#14b8a6" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <p className="m-0 border-t border-slate-100 bg-slate-50/60 px-4 py-3 text-xs leading-5 text-slate-500 sm:px-5">
-        Trend aggregation follows the selected date range. Model and sentiment filters affect the response table and summary metrics, not this chart.
-      </p>
     </section>
+  );
+}
+
+function Legend({ className, label }: { className: string; label: string }) {
+  return <span className="flex items-center gap-1.5"><span className={`h-2 w-3 rounded-sm ${className}`} />{label}</span>;
+}
+
+function TrendTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
+  const mentioned = payload.find((entry) => entry.dataKey === "mentioned");
+  const total = payload.find((entry) => entry.dataKey === "total");
+  return (
+    <div className="grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium">{formatShortDate(String(label ?? ""))}</div>
+      {mentioned && <TooltipRow label="Brand mentioned" value={mentioned.value} color="var(--chart-2)" />}
+      {total && <TooltipRow label="Responses" value={total.value} color="var(--chart-1)" />}
+    </div>
+  );
+}
+
+function TooltipRow({ label, value, color }: { label: string; value: unknown; color: string }) {
+  return (
+    <div className="flex w-full items-center gap-2">
+      <span className="size-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
+      <span className="flex-1 text-muted-foreground">{label}</span>
+      <span className="num font-medium text-foreground">{typeof value === "number" ? value.toLocaleString() : String(value ?? "")}</span>
+    </div>
   );
 }
