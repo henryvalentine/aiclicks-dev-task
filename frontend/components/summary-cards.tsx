@@ -6,6 +6,7 @@ import {
   MessageSquareText,
   ListOrdered,
   Bot,
+  type LucideIcon,
 } from "lucide-react";
 
 const MODELS: { id: ModelName; label: string; dot: string }[] = [

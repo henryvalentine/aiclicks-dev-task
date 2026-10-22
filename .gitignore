@@ -5,6 +5,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Temporary pytest test data
+backend/.pytest-temp*/
+
 # Node / Next.js
 node_modules/
 .next/
