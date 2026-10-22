@@ -84,6 +84,10 @@ class ModelRate(BaseModel):
     mentioned_count: int
     mention_rate: float
 
+class SentimentCounts(BaseModel):
+    positive: int
+    neutral: int
+    negative: int
 
 class MentionsResponse(BaseModel):
     data: list[Mention]
@@ -92,6 +96,7 @@ class MentionsResponse(BaseModel):
     mention_rate: float
     average_position: float | None
     positive_sentiment_rate: float
+    sentiment_counts: SentimentCounts
     model_rates: list[ModelRate]
     page: int
     per_page: int

@@ -29,6 +29,12 @@ export type ModelRate = {
   mention_rate: number;
 };
 
+export type SentimentCounts = {
+  positive: number;
+  neutral: number;
+  negative: number;
+};
+
 export type MentionsResponse = {
   data: Mention[];
   total: number;
@@ -36,6 +42,7 @@ export type MentionsResponse = {
   mention_rate: number;
   average_position: number | null;
   positive_sentiment_rate: number;
+  sentiment_counts: SentimentCounts;
   model_rates: ModelRate[];
   page: number;
   per_page: number;

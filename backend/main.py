@@ -138,7 +138,9 @@ async def list_mentions(request: MentionsRequest):
                            COALESCE(SUM(CASE WHEN mentioned = 1 THEN 1 ELSE 0 END), 0) AS mentioned_count,
                            AVG(CASE WHEN mentioned = 1 THEN position END) AS average_position,
                            COALESCE(SUM(CASE WHEN sentiment IS NOT NULL THEN 1 ELSE 0 END), 0) AS classified_count,
-                           COALESCE(SUM(CASE WHEN sentiment = 'positive' THEN 1 ELSE 0 END), 0) AS positive_count
+                           COALESCE(SUM(CASE WHEN sentiment = 'positive' THEN 1 ELSE 0 END), 0) AS positive_count,
+                           COALESCE(SUM(CASE WHEN sentiment = 'neutral' THEN 1 ELSE 0 END), 0) AS neutral_count,
+                           COALESCE(SUM(CASE WHEN sentiment = 'negative' THEN 1 ELSE 0 END), 0) AS negative_count
                     FROM mentions {where_sql}""",
                 params,
             )
@@ -196,6 +198,11 @@ async def list_mentions(request: MentionsRequest):
         "mention_rate": mention_rate,
         "average_position": average_position,
         "positive_sentiment_rate": positive_sentiment_rate,
+        "sentiment_counts": {
+            "positive": int(summary["positive_count"]),
+            "neutral": int(summary["neutral_count"]),
+            "negative": int(summary["negative_count"]),
+        },
         "model_rates": [model.model_dump() for model in model_rates],
         "page": request.page,
         "per_page": request.per_page,

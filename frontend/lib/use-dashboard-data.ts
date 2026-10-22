@@ -8,6 +8,7 @@ import type {
   MentionFilters,
   MentionsResponse,
   ModelRate,
+  SentimentCounts,
   TrendPoint,
   TrendsResponse,
 } from "@/lib/types";
@@ -19,6 +20,7 @@ type MentionsState = {
   mentionRate: number;
   averagePosition: number | null;
   positiveSentimentRate: number;
+  sentimentCounts: SentimentCounts;
   modelRates: ModelRate[];
   loading: boolean;
   error: string;
@@ -26,8 +28,20 @@ type MentionsState = {
 
 type TrendsState = { data: TrendPoint[]; loading: boolean; error: string };
 const emptyMentions: MentionsState = {
-  data: [], total: 0, mentionedCount: 0, mentionRate: 0, averagePosition: null,
-  positiveSentimentRate: 0, modelRates: [], loading: true, error: "",
+  data: [],
+  total: 0,
+  mentionedCount: 0,
+  mentionRate: 0,
+  averagePosition: null,
+  positiveSentimentRate: 0,
+  sentimentCounts: {
+    positive: 0,
+    neutral: 0,
+    negative: 0,
+  },
+  modelRates: [],
+  loading: true,
+  error: "",
 };
 
 export function useDashboardData(filters: MentionFilters, page: number, perPage: number, groupBy: GroupBy) {
@@ -52,6 +66,7 @@ export function useDashboardData(filters: MentionFilters, page: number, perPage:
           mentionedCount: result.mentioned_count,
           mentionRate: result.mention_rate,
           averagePosition: result.average_position,
+          sentimentCounts: result.sentiment_counts,
           positiveSentimentRate: result.positive_sentiment_rate,
           modelRates: result.model_rates,
           loading: false,

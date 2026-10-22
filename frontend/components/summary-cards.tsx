@@ -1,6 +1,12 @@
 "use client";
 
 import type { ModelName, ModelRate } from "@/lib/types";
+import {
+  TrendingUp,
+  MessageSquareText,
+  ListOrdered,
+  Bot,
+} from "lucide-react";
 
 const MODELS: { id: ModelName; label: string; dot: string }[] = [
   { id: "chatgpt", label: "ChatGPT", dot: "bg-chatgpt" },
@@ -23,7 +29,7 @@ export function SummaryCards({
   const rates = new Map(modelRates.map((item) => [item.model, item]));
   return (
     <section id="overview" className="grid scroll-mt-24 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="relative overflow-hidden rounded-xl bg-primary p-5 text-primary-foreground shadow-card">
+      {/* <div className="relative overflow-hidden rounded-xl bg-primary p-5 text-primary-foreground shadow-card">
         <p className="text-xs font-medium uppercase tracking-wider opacity-70">Mention rate</p>
         {loading ? <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-primary-foreground/15" /> : (
           <p className="num mt-2 text-4xl font-semibold tracking-tight">{mentionRate.toFixed(1)}<span className="text-xl opacity-60">%</span></p>
@@ -32,12 +38,32 @@ export function SummaryCards({
           <div className="h-full rounded-full bg-signal transition-[width] duration-700" style={{ width: `${loading ? 0 : Math.max(0, Math.min(100, mentionRate))}%` }} />
         </div>
         <p className="mt-2 text-xs opacity-60">of AI responses name your brand</p>
-      </div>
+      </div> */}
+      
+      <Stat
+        icon={TrendingUp}
+        label="Mention rate"
+        value={`${mentionRate.toFixed(1)}%`}
+        hint={`of AI responses name your brand`}
+        loading={loading}
+      />
+      <Stat
+        icon={MessageSquareText}
+        label="Responses tracked"
+        value={total.toLocaleString()}
+        hint={`${mentionedCount.toLocaleString()} with a mention`}
+        loading={loading}
+      />
 
-      <Stat label="Responses tracked" value={total.toLocaleString()} hint={`${mentionedCount.toLocaleString()} with a mention`} loading={loading} />
-      <Stat label="Avg. position" value={averagePosition === null ? "—" : `#${averagePosition.toFixed(2)}`} hint="when mentioned, lower is better" loading={loading} />
+      <Stat
+        icon={ListOrdered}
+        label="Avg. position"
+        value={averagePosition === null ? "—" : `#${averagePosition.toFixed(2)}`}
+        hint="when mentioned, lower is better"
+        loading={loading}
+      />
 
-      <div className="surface p-5">
+      <div className="surface flex h-full flex-col p-4">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Rate by model</p>
         <ul className="mt-3 space-y-2">
           {MODELS.map((model) => {
@@ -63,12 +89,47 @@ export function SummaryCards({
   );
 }
 
-function Stat({ label, value, hint, loading }: { label: string; value: string; hint: string; loading: boolean }) {
+
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  loading,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  hint: string;
+  loading: boolean;
+}) {
   return (
-    <div className="surface p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      {loading ? <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-muted" /> : <p className="num mt-2 text-4xl font-semibold tracking-tight">{value}</p>}
-      <p className="mt-6 text-xs text-muted-foreground">{hint}</p>
+    <div className="surface flex h-full flex-col p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+
+      <div className="flex items-center justify-between">
+        {loading ? (
+          <div className="h-10 w-28 animate-pulse rounded-md bg-muted" />
+        ) : (
+          <p className="num min-w-0 break-words text-4xl font-semibold tracking-tight" style={{paddingTop: "25px"}}>
+            {value}
+          </p>
+        )}
+
+        <Icon
+          className="size-5 shrink-0 text-muted-foreground"
+          strokeWidth={1.8}
+          aria-hidden="true"
+        />
+      </div>
+
+      <p className="mt-auto pt-3 text-xs text-muted-foreground">
+        {hint}
+      </p>
     </div>
   );
 }
+
+
